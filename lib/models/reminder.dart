@@ -75,6 +75,7 @@ class Reminder {
   DateTime dueDate;
   RepeatInterval repeat;
   int remindBeforeDays;
+  TimeOfDay remindAt;
   String? notes;
   bool done;
   DateTime createdAt;
@@ -87,6 +88,7 @@ class Reminder {
     required this.dueDate,
     this.repeat = RepeatInterval.none,
     this.remindBeforeDays = 1,
+    this.remindAt = const TimeOfDay(hour: 9, minute: 0),
     this.notes,
     this.done = false,
     DateTime? createdAt,
@@ -113,6 +115,7 @@ class Reminder {
         'dueDate': dueDate.toIso8601String(),
         'repeat': repeat.index,
         'remindBeforeDays': remindBeforeDays,
+        'remindAtMinutes': remindAt.hour * 60 + remindAt.minute,
         'notes': notes,
         'done': done,
         'createdAt': createdAt.toIso8601String(),
@@ -126,6 +129,7 @@ class Reminder {
         dueDate: DateTime.parse(m['dueDate'] as String),
         repeat: RepeatInterval.values[m['repeat'] as int? ?? 0],
         remindBeforeDays: m['remindBeforeDays'] as int? ?? 1,
+        remindAt: _timeOfDay(m['remindAtMinutes'] as int? ?? 540),
         notes: m['notes'] as String?,
         done: m['done'] as bool? ?? false,
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? ''),
@@ -138,6 +142,7 @@ class Reminder {
     DateTime? dueDate,
     RepeatInterval? repeat,
     int? remindBeforeDays,
+    TimeOfDay? remindAt,
     String? notes,
     bool? done,
   }) =>
@@ -149,8 +154,12 @@ class Reminder {
         dueDate: dueDate ?? this.dueDate,
         repeat: repeat ?? this.repeat,
         remindBeforeDays: remindBeforeDays ?? this.remindBeforeDays,
+        remindAt: remindAt ?? this.remindAt,
         notes: notes ?? this.notes,
         done: done ?? this.done,
         createdAt: createdAt,
       );
 }
+
+TimeOfDay _timeOfDay(int minutes) =>
+    TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);

@@ -53,8 +53,8 @@ class NotificationService {
       r.dueDate.year,
       r.dueDate.month,
       r.dueDate.day,
-      9,
-      0,
+      r.remindAt.hour,
+      r.remindAt.minute,
     ).subtract(Duration(days: r.remindBeforeDays));
     if (when.isBefore(DateTime.now())) return;
 

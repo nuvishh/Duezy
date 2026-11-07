@@ -22,6 +22,7 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
   late DateTime _dueDate;
   late RepeatInterval _repeat;
   late int _remindBefore;
+  late TimeOfDay _remindAt;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
     _dueDate = e?.dueDate ?? DateTime.now().add(const Duration(days: 1));
     _repeat = e?.repeat ?? RepeatInterval.none;
     _remindBefore = e?.remindBeforeDays ?? 1;
+    _remindAt = e?.remindAt ?? const TimeOfDay(hour: 9, minute: 0);
   }
 
   @override
@@ -48,6 +50,12 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final scheme = Theme.of(context).colorScheme;
+    final fieldFill = scheme.surfaceContainerHighest;
+    final fieldBorder = OutlineInputBorder(
+      borderSide: BorderSide.none,
+      borderRadius: BorderRadius.circular(16),
+    );
     return Scaffold(
       appBar: AppBar(title: Text(isEdit ? 'Edit reminder' : 'New reminder')),
       body: Form(
@@ -57,17 +65,20 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
           children: [
             TextFormField(
               controller: _title,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Title',
                 hintText: 'e.g. Netflix, Home loan EMI, Bike insurance',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: fieldFill,
+                border: fieldBorder,
               ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Give it a title' : null,
             ),
             const SizedBox(height: 16),
-            const Text('Category',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            Text('Category',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, color: scheme.primary)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -97,9 +108,11 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
                     controller: _amount,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Amount (₹, optional)',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: fieldFill,
+                      border: fieldBorder,
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return null;
@@ -114,9 +127,11 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
                   child: InkWell(
                     onTap: _pickDate,
                     child: InputDecorator(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Due date',
-                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: fieldFill,
+                        border: fieldBorder,
                       ),
                       child: Row(
                         children: [
@@ -136,9 +151,11 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
                 Expanded(
                   child: DropdownButtonFormField<RepeatInterval>(
                     initialValue: _repeat,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Repeats',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: fieldFill,
+                      border: fieldBorder,
                     ),
                     items: RepeatInterval.values
                         .map((r) => DropdownMenuItem(
@@ -152,9 +169,11 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     initialValue: _remindBefore,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Remind me',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: fieldFill,
+                      border: fieldBorder,
                     ),
                     items: const [
                       DropdownMenuItem(value: 0, child: Text('On the day')),
@@ -169,13 +188,42 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            InkWell(
+              onTap: _pickTime,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Reminder time',
+                  filled: true,
+                  fillColor: fieldFill,
+                  border: fieldBorder,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.access_time_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text(_remindAt.format(context)),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        '— notification fires at this time',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _notes,
               maxLines: 2,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Notes (optional)',
                 hintText: 'Policy number, account, etc.',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: fieldFill,
+                border: fieldBorder,
               ),
             ),
             const SizedBox(height: 24),
@@ -191,6 +239,14 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _remindAt,
+    );
+    if (picked != null) setState(() => _remindAt = picked);
   }
 
   Future<void> _pickDate() async {
@@ -214,6 +270,7 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
       dueDate: _dueDate,
       repeat: _repeat,
       remindBeforeDays: _remindBefore,
+      remindAt: _remindAt,
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
     ));
   }
@@ -230,6 +287,7 @@ class ReminderDraft {
   final DateTime dueDate;
   final RepeatInterval repeat;
   final int remindBeforeDays;
+  final TimeOfDay remindAt;
   final String? notes;
 
   ReminderDraft({
@@ -239,6 +297,7 @@ class ReminderDraft {
     required this.dueDate,
     required this.repeat,
     required this.remindBeforeDays,
+    required this.remindAt,
     this.notes,
   });
 }

@@ -47,9 +47,9 @@ class ReminderCard extends StatelessWidget {
       },
       child: Card(
         elevation: 0,
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceContainer,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           side: r.isOverdue
               ? const BorderSide(color: Colors.redAccent, width: 1)
               : BorderSide.none,
@@ -99,6 +99,13 @@ class ReminderCard extends StatelessWidget {
                         color: dueColor,
                         fontWeight: FontWeight.w600),
                   ),
+                  if (!r.done) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      r.remindAt.format(context),
+                      style: TextStyle(fontSize: 12, color: dueColor),
+                    ),
+                  ],
                   if (r.repeat != RepeatInterval.none) ...[
                     const SizedBox(width: 6),
                     Icon(Icons.repeat_rounded,

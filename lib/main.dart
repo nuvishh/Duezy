@@ -1,3 +1,4 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
@@ -27,24 +28,33 @@ class DuezyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Duezy',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C5CE7),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C5CE7),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: HomeScreen(storage: storage, notifications: notifications),
+    // Material You: follow the device wallpaper colors on Android 12+,
+    // fall back to the Duezy seed purple everywhere else.
+    const seed = Color(0xFF6C5CE7);
+    return DynamicColorBuilder(
+      builder: (lightDynamic, darkDynamic) {
+        return MaterialApp(
+          title: 'Duezy',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: lightDynamic ??
+                ColorScheme.fromSeed(
+                  seedColor: seed,
+                  brightness: Brightness.light,
+                ),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: darkDynamic ??
+                ColorScheme.fromSeed(
+                  seedColor: seed,
+                  brightness: Brightness.dark,
+                ),
+            useMaterial3: true,
+          ),
+          home: HomeScreen(storage: storage, notifications: notifications),
+        );
+      },
     );
   }
 }

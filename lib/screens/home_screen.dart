@@ -133,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
       dueDate: draft.dueDate,
       repeat: draft.repeat,
       remindBeforeDays: draft.remindBeforeDays,
+      remindAt: draft.remindAt,
       notes: draft.notes,
     );
     await widget.storage.save(r);
@@ -156,6 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
       dueDate: draft.dueDate,
       repeat: draft.repeat,
       remindBeforeDays: draft.remindBeforeDays,
+      remindAt: draft.remindAt,
       notes: draft.notes,
     );
     await widget.storage.save(updated);
@@ -221,29 +223,31 @@ class _SummaryCard extends StatelessWidget {
     final overdue = storage.overdueCount();
     final active = storage.active().length;
     final now = DateTime.now();
+    final scheme = Theme.of(context).colorScheme;
+    final onPrimary = scheme.onPrimary;
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6C5CE7), Color(0xFF4A3FD1)],
+        gradient: LinearGradient(
+          colors: [scheme.primary, scheme.tertiary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             DateFormat('MMMM y').format(now),
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: onPrimary.withValues(alpha: 0.75), fontSize: 13),
           ),
           const SizedBox(height: 4),
           Text(
             '₹${_fmt(total)} due',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: onPrimary,
               fontSize: 28,
               fontWeight: FontWeight.bold,
             ),
@@ -282,21 +286,22 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: highlight
             ? Colors.redAccent.withValues(alpha: 0.9)
-            : Colors.white.withValues(alpha: 0.2),
+            : onPrimary.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.white),
+          Icon(icon, size: 14, color: onPrimary),
           const SizedBox(width: 6),
           Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
+              style: TextStyle(color: onPrimary, fontSize: 12)),
         ],
       ),
     );
