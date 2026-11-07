@@ -24,6 +24,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   ReminderCategory? _filter;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +50,18 @@ class _HomeScreenState extends State<HomeScreen> {
         valueListenable: widget.storage.listenable(),
         builder: (context, _, __) {
           final all = widget.storage.active();
-          final list = _filter == null
+          final q = _query.trim().toLowerCase();
+          final searched = q.isEmpty
               ? all
-              : all.where((r) => r.category == _filter).toList();
+              : all
+                  .where((r) =>
+                      r.title.toLowerCase().contains(q) ||
+                      (r.notes ?? '').toLowerCase().contains(q) ||
+                      r.category.label.toLowerCase().contains(q))
+                  .toList();
+          final list = _filter == null
+              ? searched
+              : searched.where((r) => r.category == _filter).toList();
           return RefreshIndicator(
             onRefresh: () async => setState(() {}),
             child: ListView(
@@ -52,13 +69,47 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 _SummaryCard(storage: widget.storage),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search reminders…',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear_rounded),
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
+                    filled: true,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide.none,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 _FilterRow(
                   selected: _filter,
                   onSelect: (c) => setState(() => _filter = c),
                 ),
                 const SizedBox(height: 8),
                 if (list.isEmpty)
-                  _EmptyState(onAdd: _addReminder)
+                  _query.trim().isEmpty
+                      ? _EmptyState(onAdd: _addReminder)
+                      : _NoResults(
+                          query: _query.trim(),
+                          onClear: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        )
                 else
                   ..._grouped(list),
               ],
@@ -363,6 +414,37 @@ class _EmptyState extends StatelessWidget {
             onPressed: onAdd,
             icon: const Icon(Icons.add_rounded),
             label: const Text('Add reminder'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoResults extends StatelessWidget {
+  final String query;
+  final VoidCallback onClear;
+  const _NoResults({required this.query, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(Icons.search_off_rounded,
+              size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 12),
+          const Text('No matches',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text('Nothing matches "$query".',
+              style: TextStyle(color: Colors.grey.shade600)),
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            onPressed: onClear,
+            icon: const Icon(Icons.clear_rounded),
+            label: const Text('Clear search'),
           ),
         ],
       ),
