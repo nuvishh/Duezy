@@ -203,10 +203,13 @@ class _EditReminderScreenState extends State<EditReminderScreen> {
                     const SizedBox(width: 8),
                     Text(_remindAt.format(context)),
                     const SizedBox(width: 4),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        '— notification fires at this time',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        _remindBefore == 0
+                            ? '— fires on the due day at this time'
+                            : '— fires $_remindBefore ${_remindBefore == 1 ? 'day' : 'days'} before, at this time',
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

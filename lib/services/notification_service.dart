@@ -30,6 +30,13 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
+    // Exact alarms: the manifest already declares SCHEDULE_EXACT_ALARM +
+    // USE_EXACT_ALARM; ask the system to grant it so reminders fire on
+    // time instead of being batched by Doze.
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestExactAlarmsPermission();
     await _plugin
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
@@ -49,31 +56,62 @@ class NotificationService {
 
   Future<void> schedule(Reminder r) async {
     if (!_ready || r.done) return;
-    final when = DateTime(
+    var when = DateTime(
       r.dueDate.year,
       r.dueDate.month,
       r.dueDate.day,
       r.remindAt.hour,
       r.remindAt.minute,
     ).subtract(Duration(days: r.remindBeforeDays));
+    if (when.isBefore(DateTime.now())) {
+      // The "days before" slot already passed (e.g. a reminder created
+      // today for today with "1 day before") — fall back to the due day
+      // at the chosen time instead of silently dropping the notification.
+      when = DateTime(
+        r.dueDate.year,
+        r.dueDate.month,
+        r.dueDate.day,
+        r.remindAt.hour,
+        r.remindAt.minute,
+      );
+    }
     if (when.isBefore(DateTime.now())) return;
 
     final amount = r.amount != null ? ' — ₹${_fmtAmount(r.amount!)}' : '';
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'duezy_reminders',
+        'Due date reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+    try {
+      // Exact alarm so the reminder fires on time, not batched by Doze.
+      await _scheduleWithMode(r, when, amount, details,
+          AndroidScheduleMode.exactAllowWhileIdle);
+    } catch (_) {
+      // Exact alarms not granted on this device — fall back to inexact.
+      await _scheduleWithMode(
+          r, when, amount, details, AndroidScheduleMode.inexactAllowWhileIdle);
+    }
+  }
+
+  Future<void> _scheduleWithMode(
+    Reminder r,
+    DateTime when,
+    String amount,
+    NotificationDetails details,
+    AndroidScheduleMode mode,
+  ) async {
     await _plugin.zonedSchedule(
       _notifId(r.id),
       'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
       '${r.category.label}$amount',
       tz.TZDateTime.from(when, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'duezy_reminders',
-          'Due date reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      details,
+      androidScheduleMode: mode,
     );
   }
 

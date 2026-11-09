@@ -72,7 +72,12 @@ class ReminderCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 2),
-              Row(
+              // Wrap (not Row): on narrow cards the time must drop to a
+              // second line instead of overflowing under the trailing amount.
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Container(
                     padding:
@@ -89,28 +94,29 @@ class ReminderCard extends StatelessWidget {
                           fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.schedule_rounded, size: 13, color: dueColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    dueLabel,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: dueColor,
-                        fontWeight: FontWeight.w600),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.schedule_rounded,
+                          size: 13, color: dueColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        dueLabel,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: dueColor,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
-                  if (!r.done) ...[
-                    const SizedBox(width: 6),
+                  if (!r.done)
                     Text(
                       r.remindAt.format(context),
                       style: TextStyle(fontSize: 12, color: dueColor),
                     ),
-                  ],
-                  if (r.repeat != RepeatInterval.none) ...[
-                    const SizedBox(width: 6),
+                  if (r.repeat != RepeatInterval.none)
                     Icon(Icons.repeat_rounded,
                         size: 13, color: Colors.grey.shade600),
-                  ],
                 ],
               ),
               if (r.notes?.isNotEmpty ?? false)
