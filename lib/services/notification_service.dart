@@ -53,6 +53,69 @@ class NotificationService {
     return status.isGranted;
   }
 
+  /// Ask for notification permission in-app (Android 13+ system dialog).
+  Future<bool> requestNotifications() async {
+    final status = await Permission.notification.request();
+    return status.isGranted;
+  }
+
+  /// True when the app may schedule exact alarms, so reminders fire on
+  /// time instead of being batched by Doze. On iOS / non-Android this
+  /// does not apply, so it reports true; a null answer is treated as
+  /// granted rather than raising a false alarm.
+  Future<bool> exactAlarmsEnabled() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      final ok = await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.canScheduleExactNotifications();
+      return ok ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Ask for exact-alarm permission in-app (opens the system page).
+  Future<bool> requestExactAlarms() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      final ok = await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestExactAlarmsPermission();
+      return ok ?? true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// True when battery optimisation is ignored for Duezy, so Doze /
+  /// MIUI cannot delay or kill scheduled reminders. Not applicable on
+  /// iOS, so it reports true there; errors report true rather than
+  /// raising a false alarm.
+  Future<bool> batteryOptimizationsIgnored() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      return status.isGranted;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Ask to ignore battery optimisations (opens the system dialog/page).
+  Future<bool> requestBatteryExemption() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      final status =
+          await Permission.ignoreBatteryOptimizations.request();
+      return status.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Opens the system App info page for Duezy, so the user can turn
   /// notifications on when permission was denied.
   Future<bool> openSettings() => openAppSettings();

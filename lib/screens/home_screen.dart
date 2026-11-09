@@ -27,14 +27,22 @@ class _HomeScreenState extends State<HomeScreen>
   ReminderCategory? _filter;
   final _searchController = TextEditingController();
   String _query = '';
-  bool _notificationsOff = false;
   bool _bannerDismissed = false;
+  // Keys of the permissions currently missing: 'notifications',
+  // 'exactAlarms', 'battery'. Empty means reminders can alert on time.
+  Set<String> _missing = {};
+
+  static const _permissionLabels = {
+    'notifications': 'Notifications',
+    'exactAlarms': 'Exact alarms',
+    'battery': 'Battery optimisation off',
+  };
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkNotifications());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPermissions());
   }
 
   @override
@@ -47,12 +55,118 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Back from Settings — re-check so the banner clears itself.
-    if (state == AppLifecycleState.resumed) _checkNotifications();
+    if (state == AppLifecycleState.resumed) _checkPermissions();
   }
 
-  Future<void> _checkNotifications() async {
-    final ok = await widget.notifications.notificationsEnabled();
-    if (mounted) setState(() => _notificationsOff = !ok);
+  /// Checks notifications + exact alarms + battery optimisation, and
+  /// shows the alert again if the missing set changed since dismiss.
+  Future<void> _checkPermissions() async {
+    final missing = <String>{};
+    if (!await widget.notifications.notificationsEnabled()) {
+      missing.add('notifications');
+    }
+    if (!await widget.notifications.exactAlarmsEnabled()) {
+      missing.add('exactAlarms');
+    }
+    if (!await widget.notifications.batteryOptimizationsIgnored()) {
+      missing.add('battery');
+    }
+    if (!mounted) return;
+    setState(() {
+      if (missing.length != _missing.length ||
+          !missing.containsAll(_missing)) {
+        _bannerDismissed = false;
+      }
+      _missing = missing;
+    });
+  }
+
+  /// Tries the in-app permission prompts for every missing item, then
+  /// re-checks; anything still missing needs the Settings page.
+  Future<void> _requestMissing() async {
+    if (_missing.contains('notifications')) {
+      await widget.notifications.requestNotifications();
+    }
+    if (_missing.contains('exactAlarms')) {
+      await widget.notifications.requestExactAlarms();
+    }
+    if (_missing.contains('battery')) {
+      await widget.notifications.requestBatteryExemption();
+    }
+    await _checkPermissions();
+  }
+
+  /// Permissions alert: status of all three, visible even when all are
+  /// on, with Enable / Open Settings per item.
+  Future<void> _showPermissionsDialog() async {
+    final statuses = <String, bool>{
+      'notifications':
+          await widget.notifications.notificationsEnabled(),
+      'exactAlarms': await widget.notifications.exactAlarmsEnabled(),
+      'battery':
+          await widget.notifications.batteryOptimizationsIgnored(),
+    };
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> refresh() async {
+            final next = <String, bool>{
+              'notifications': await widget.notifications
+                  .notificationsEnabled(),
+              'exactAlarms':
+                  await widget.notifications.exactAlarmsEnabled(),
+              'battery': await widget.notifications
+                  .batteryOptimizationsIgnored(),
+            };
+            setDialogState(() => statuses.addAll(next));
+            await _checkPermissions();
+          }
+
+          Future<void> enable(String key) async {
+            if (key == 'notifications') {
+              await widget.notifications.requestNotifications();
+            } else if (key == 'exactAlarms') {
+              await widget.notifications.requestExactAlarms();
+            } else {
+              await widget.notifications.requestBatteryExemption();
+            }
+            await refresh();
+          }
+
+          return AlertDialog(
+            title: const Text('Permissions'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final key in _permissionLabels.keys)
+                  _PermissionRow(
+                    label: _permissionLabels[key]!,
+                    enabled: statuses[key] ?? true,
+                    onEnable: () => enable(key),
+                    onOpenSettings: () async {
+                      await widget.notifications.openSettings();
+                      await refresh();
+                    },
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'On MIUI, also turn on Autostart in Settings → Apps → Duezy.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -61,6 +175,15 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         title: const Text('⏰ Duezy'),
         actions: [
+          IconButton(
+            icon: Icon(
+              _missing.isEmpty
+                  ? Icons.notifications_active_rounded
+                  : Icons.notifications_off_rounded,
+            ),
+            tooltip: 'Permissions',
+            onPressed: _showPermissionsDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: 'History',
@@ -90,9 +213,13 @@ class _HomeScreenState extends State<HomeScreen>
               padding: const EdgeInsets.all(16),
               children: [
                 _SummaryCard(storage: widget.storage),
-                if (_notificationsOff && !_bannerDismissed) ...[
+                if (_missing.isNotEmpty && !_bannerDismissed) ...[
                   const SizedBox(height: 12),
-                  _NotificationsOffBanner(
+                  _PermissionsBanner(
+                    missingLabels: _missing
+                        .map((k) => _permissionLabels[k]!)
+                        .toList(),
+                    onAllow: _requestMissing,
                     onOpenSettings: () =>
                         widget.notifications.openSettings(),
                     onDismiss: () =>
@@ -359,13 +486,18 @@ class _SummaryCard extends StatelessWidget {
       v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
 }
 
-/// Shown when notifications are off: reminders are scheduled but no
-/// alert can appear. One tap opens the system App info page for Duezy.
-class _NotificationsOffBanner extends StatelessWidget {
+/// Shown when any reminder permission is missing: reminders are
+/// scheduled but may not alert on time. "Allow" tries the in-app
+/// prompts; "Settings" opens the system App info page for Duezy.
+class _PermissionsBanner extends StatelessWidget {
+  final List<String> missingLabels;
+  final VoidCallback onAllow;
   final VoidCallback onOpenSettings;
   final VoidCallback onDismiss;
 
-  const _NotificationsOffBanner({
+  const _PermissionsBanner({
+    required this.missingLabels,
+    required this.onAllow,
     required this.onOpenSettings,
     required this.onDismiss,
   });
@@ -379,26 +511,84 @@ class _NotificationsOffBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.4)),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_off_rounded,
+                  color: Colors.orangeAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Missing: ${missingLabels.join(' • ')} — reminders may not alert on time.',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                tooltip: 'Dismiss',
+                onPressed: onDismiss,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              FilledButton.tonal(
+                onPressed: onAllow,
+                child: const Text('Allow'),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: onOpenSettings,
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row of the Permissions dialog: status + Enable / Settings.
+class _PermissionRow extends StatelessWidget {
+  final String label;
+  final bool enabled;
+  final VoidCallback onEnable;
+  final VoidCallback onOpenSettings;
+
+  const _PermissionRow({
+    required this.label,
+    required this.enabled,
+    required this.onEnable,
+    required this.onOpenSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          const Icon(Icons.notifications_off_rounded,
-              color: Colors.orangeAccent),
+          Icon(
+            enabled
+                ? Icons.check_circle_rounded
+                : Icons.error_rounded,
+            color: enabled ? Colors.green : Colors.orangeAccent,
+          ),
           const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Notifications are off — reminders won\'t alert you.',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-          TextButton(
-            onPressed: onOpenSettings,
-            child: const Text('Open Settings'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 18),
-            tooltip: 'Dismiss',
-            onPressed: onDismiss,
-          ),
+          if (!enabled) ...[
+            TextButton(onPressed: onEnable, child: const Text('Enable')),
+            TextButton(
+                onPressed: onOpenSettings, child: const Text('Settings')),
+          ],
         ],
       ),
     );
