@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -44,6 +45,17 @@ class NotificationService {
 
     _ready = true;
   }
+
+  /// True when the user has allowed notifications for Duezy.
+  /// (On Android < 13 this is always granted at install.)
+  Future<bool> notificationsEnabled() async {
+    final status = await Permission.notification.status;
+    return status.isGranted;
+  }
+
+  /// Opens the system App info page for Duezy, so the user can turn
+  /// notifications on when permission was denied.
+  Future<bool> openSettings() => openAppSettings();
 
   /// Very small mapping; unknown zones fall back to UTC via [init] catch.
   String _tzName(String local) {

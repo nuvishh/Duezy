@@ -22,15 +22,37 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver {
   ReminderCategory? _filter;
   final _searchController = TextEditingController();
   String _query = '';
+  bool _notificationsOff = false;
+  bool _bannerDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkNotifications());
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from Settings — re-check so the banner clears itself.
+    if (state == AppLifecycleState.resumed) _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    final ok = await widget.notifications.notificationsEnabled();
+    if (mounted) setState(() => _notificationsOff = !ok);
   }
 
   @override
@@ -68,6 +90,15 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _SummaryCard(storage: widget.storage),
+                if (_notificationsOff && !_bannerDismissed) ...[
+                  const SizedBox(height: 12),
+                  _NotificationsOffBanner(
+                    onOpenSettings: () =>
+                        widget.notifications.openSettings(),
+                    onDismiss: () =>
+                        setState(() => _bannerDismissed = true),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _searchController,
@@ -326,6 +357,52 @@ class _SummaryCard extends StatelessWidget {
 
   String _fmt(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+}
+
+/// Shown when notifications are off: reminders are scheduled but no
+/// alert can appear. One tap opens the system App info page for Duezy.
+class _NotificationsOffBanner extends StatelessWidget {
+  final VoidCallback onOpenSettings;
+  final VoidCallback onDismiss;
+
+  const _NotificationsOffBanner({
+    required this.onOpenSettings,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orangeAccent.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_off_rounded,
+              color: Colors.orangeAccent),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Notifications are off — reminders won\'t alert you.',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: onOpenSettings,
+            child: const Text('Open Settings'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Dismiss',
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StatChip extends StatelessWidget {
