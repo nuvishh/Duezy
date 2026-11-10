@@ -140,7 +140,19 @@ class NotificationService {
     return 'UTC';
   }
 
-  int _notifId(String reminderId) => reminderId.hashCode & 0x7fffffff;
+  // Stable notification id derived from the reminder's UUID.
+  // String.hashCode is NOT stable across app launches (Dart randomises
+  // it per run), so using it meant cancel() never cancelled the right
+  // pending notification after a restart, and rescheduleAll() kept
+  // adding stale duplicates instead of replacing the old one.
+  int _notifId(String reminderId) {
+    final hex = reminderId.replaceAll('-', '');
+    final v = int.tryParse(
+      hex.substring(0, hex.length >= 8 ? 8 : hex.length),
+      radix: 16,
+    );
+    return (v ?? 0) & 0x7fffffff;
+  }
 
   Future<void> schedule(Reminder r) async {
     if (!_ready || r.done) return;
@@ -197,11 +209,17 @@ class NotificationService {
     NotificationDetails details,
     AndroidScheduleMode mode,
   ) async {
+    // Schedule by instant, not by wall-clock components: `when` is a
+    // local DateTime whose millisecondsSinceEpoch is the true instant.
+    // TZDateTime.from(when, tz.local) interpreted the components in
+    // tz.local — if tz.local is wrong (e.g. UTC), every reminder
+    // fired hours late, while the relative +1-min test still worked.
     await _plugin.zonedSchedule(
       _notifId(r.id),
       'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
       '${r.category.label}$amount',
-      tz.TZDateTime.from(when, tz.local),
+      tz.TZDateTime.fromMillisecondsSinceEpoch(
+          tz.local, when.millisecondsSinceEpoch),
       details,
       androidScheduleMode: mode,
     );
