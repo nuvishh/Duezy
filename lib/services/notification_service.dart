@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -14,19 +13,25 @@ class NotificationService {
 
   Future<void> init() async {
     tzdata.initializeTimeZones();
-    // Device timezone from the OS (IANA name, e.g. Asia/Kolkata).
-    // The old abbreviation mapping ("IST" only) mis-scheduled alarms
-    // on devices reporting a different name, firing hours late.
+    // Device timezone: try the abbreviation map first ("IST" ->
+    // Asia/Kolkata), else pick any tz location whose current UTC
+    // offset matches the device. (A dedicated timezone plugin was
+    // dropped: flutter_native_timezone 2.0.0 has no Android namespace
+    // and fails to configure under AGP 9.2.)
     try {
-      final name = await FlutterNativeTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
-    } catch (_) {
-      try {
-        final name = DateTime.now().timeZoneName;
-        tz.setLocalLocation(tz.getLocation(_tzName(name)));
-      } catch (_) {
-        tz.setLocalLocation(tz.UTC);
+      final mapped = _tzName(DateTime.now().timeZoneName);
+      if (mapped != 'UTC') {
+        tz.setLocalLocation(tz.getLocation(mapped));
+      } else {
+        final offset = DateTime.now().timeZoneOffset.inSeconds;
+        final match = tz.timeZoneDatabase.locations.values.firstWhere(
+          (loc) => loc.currentTimeZone.offset == offset,
+          orElse: () => tz.UTC,
+        );
+        tz.setLocalLocation(match);
       }
+    } catch (_) {
+      tz.setLocalLocation(tz.UTC);
     }
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
