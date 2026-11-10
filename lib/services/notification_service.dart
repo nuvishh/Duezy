@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -13,12 +14,19 @@ class NotificationService {
 
   Future<void> init() async {
     tzdata.initializeTimeZones();
-    // Best-effort local timezone name; falls back to UTC.
+    // Device timezone from the OS (IANA name, e.g. Asia/Kolkata).
+    // The old abbreviation mapping ("IST" only) mis-scheduled alarms
+    // on devices reporting a different name, firing hours late.
     try {
-      final name = DateTime.now().timeZoneName;
-      tz.setLocalLocation(tz.getLocation(_tzName(name)));
+      final name = await FlutterNativeTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
     } catch (_) {
-      tz.setLocalLocation(tz.UTC);
+      try {
+        final name = DateTime.now().timeZoneName;
+        tz.setLocalLocation(tz.getLocation(_tzName(name)));
+      } catch (_) {
+        tz.setLocalLocation(tz.UTC);
+      }
     }
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -150,7 +158,11 @@ class NotificationService {
         r.remindAt.minute,
       );
     }
-    if (when.isBefore(DateTime.now())) return;
+    if (when.isBefore(DateTime.now())) {
+      // Chosen time already passed (e.g. saved at 3:21 for 3:20) —
+      // fire a minute from now instead of silently dropping it.
+      when = DateTime.now().add(const Duration(minutes: 1));
+    }
 
     final amount = r.amount != null ? ' — ₹${_fmtAmount(r.amount!)}' : '';
     const details = NotificationDetails(
@@ -194,6 +206,59 @@ class NotificationService {
     if (!_ready) return;
     await _plugin.cancel(_notifId(r.id));
   }
+
+  /// IANA name of the timezone alarms are scheduled in (debug aid).
+  String localTimeZoneName() => tz.local.name;
+
+  /// Titles of notifications currently registered with the OS.
+  Future<List<String>> pendingScheduled() async {
+    final pending = await _plugin.pendingNotificationRequests();
+    return pending.map((p) => p.title ?? '(no title)').toList();
+  }
+
+  /// Immediate test notification — proves the channel can show at all.
+  Future<void> showTestNotification() async {
+    await _plugin.show(
+      999998,
+      'Duezy test',
+      'Immediate test — if you see this, notifications can show.',
+      _testDetails,
+    );
+  }
+
+  /// Test notification scheduled 1 minute ahead — proves alarms fire.
+  Future<void> scheduleTestNotification() async {
+    final when = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 1));
+    try {
+      await _plugin.zonedSchedule(
+        999997,
+        'Duezy test (scheduled)',
+        'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+        when,
+        _testDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (_) {
+      await _plugin.zonedSchedule(
+        999997,
+        'Duezy test (scheduled)',
+        'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+        when,
+        _testDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
+  }
+
+  static const _testDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'duezy_reminders',
+      'Due date reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
 
   Future<void> rescheduleAll(Iterable<Reminder> reminders) async {
     if (!_ready) return;

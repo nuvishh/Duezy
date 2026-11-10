@@ -106,6 +106,9 @@ class _HomeScreenState extends State<HomeScreen>
       'battery':
           await widget.notifications.batteryOptimizationsIgnored(),
     };
+    final pending = await widget.notifications.pendingScheduled();
+    final tzName = widget.notifications.localTimeZoneName();
+    String? testStatus;
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -155,6 +158,34 @@ class _HomeScreenState extends State<HomeScreen>
                   'On MIUI, also turn on Autostart in Settings → Apps → Duezy.',
                   style: TextStyle(fontSize: 12),
                 ),
+                const Divider(height: 24),
+                Text(
+                  'Scheduled with system: ${pending.isEmpty ? 'none' : pending.join(', ')}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                Text(
+                  'Timezone: $tzName',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    await widget.notifications.showTestNotification();
+                    await widget.notifications
+                        .scheduleTestNotification();
+                    final after =
+                        await widget.notifications.pendingScheduled();
+                    testStatus =
+                        'Test sent — immediate one should show now, scheduled one in 1 minute. Pending: ${after.length}.';
+                    setDialogState(() {});
+                  },
+                  icon: const Icon(Icons.notifications_active_rounded),
+                  label: const Text('Send test notification'),
+                ),
+                if (testStatus != null) ...[
+                  const SizedBox(height: 8),
+                  Text(testStatus!, style: const TextStyle(fontSize: 12)),
+                ],
               ],
             ),
             actions: [
