@@ -192,13 +192,25 @@ class NotificationService {
       iOS: DarwinNotificationDetails(),
     );
     try {
-      // Exact alarm so the reminder fires on time, not batched by Doze.
+      // Alarm-clock mode FIRST (setAlarmClock): MIUI/HyperOS swallows
+      // setExactAndAllowWhileIdle alarms even with exact-alarms
+      // permission, Autostart and "No restrictions" all on (verified on
+      // the user's Redmi 12 5G, 2026-11-11). An alarm-clock alarm is
+      // treated as a user-visible alarm and is not blocked — trade-off
+      // is a small alarm icon in the status bar while a reminder is
+      // pending, which is fine for a reminder app.
       await _scheduleWithMode(r, when, amount, details,
-          AndroidScheduleMode.exactAllowWhileIdle);
+          AndroidScheduleMode.alarmClock);
     } catch (_) {
-      // Exact alarms not granted on this device — fall back to inexact.
-      await _scheduleWithMode(
-          r, when, amount, details, AndroidScheduleMode.inexactAllowWhileIdle);
+      try {
+        // Exact alarm so the reminder fires on time, not batched by Doze.
+        await _scheduleWithMode(r, when, amount, details,
+            AndroidScheduleMode.exactAllowWhileIdle);
+      } catch (_) {
+        // Exact alarms not granted on this device — fall back to inexact.
+        await _scheduleWithMode(
+            r, when, amount, details, AndroidScheduleMode.inexactAllowWhileIdle);
+      }
     }
   }
 
@@ -250,6 +262,8 @@ class NotificationService {
   }
 
   /// Test notification scheduled 1 minute ahead — proves alarms fire.
+  /// Same mode chain as schedule(): alarmClock first (MIUI-proof),
+  /// then exact, then inexact.
   Future<void> scheduleTestNotification() async {
     final when = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 1));
     try {
@@ -259,17 +273,28 @@ class NotificationService {
         'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
         when,
         _testDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
       );
     } catch (_) {
-      await _plugin.zonedSchedule(
-        999997,
-        'Duezy test (scheduled)',
-        'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
-        when,
-        _testDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
+      try {
+        await _plugin.zonedSchedule(
+          999997,
+          'Duezy test (scheduled)',
+          'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+          when,
+          _testDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+      } catch (_) {
+        await _plugin.zonedSchedule(
+          999997,
+          'Duezy test (scheduled)',
+          'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+          when,
+          _testDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      }
     }
   }
 
@@ -285,6 +310,11 @@ class NotificationService {
 
   Future<void> rescheduleAll(Iterable<Reminder> reminders) async {
     if (!_ready) return;
+    // Wipe everything first: reminders scheduled under the old
+    // String.hashCode ids (v1.0.3 and earlier) can never be cancelled
+    // by id, so without this they linger in the pending list and may
+    // fire as duplicates once alarm delivery works.
+    await _plugin.cancelAll();
     for (final r in reminders) {
       await cancel(r);
       await schedule(r);
