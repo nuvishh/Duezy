@@ -107,6 +107,34 @@ class Reminder {
         dueDate.day == now.day;
   }
 
+  /// The instant this reminder's notification should fire: the due date
+  /// at [remindAt], pulled back by [remindBeforeDays]. If that slot
+  /// already passed (e.g. created today for today with "1 day before"),
+  /// the due day at the chosen time is used instead. Callers that
+  /// schedule an alarm add their own "already past → soon" fallback;
+  /// the safety net uses this raw instant to tell a missed reminder
+  /// from one that is not due yet.
+  DateTime fireTime({DateTime? now}) {
+    final at = now ?? DateTime.now();
+    var when = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day,
+      remindAt.hour,
+      remindAt.minute,
+    ).subtract(Duration(days: remindBeforeDays));
+    if (when.isBefore(at)) {
+      when = DateTime(
+        dueDate.year,
+        dueDate.month,
+        dueDate.day,
+        remindAt.hour,
+        remindAt.minute,
+      );
+    }
+    return when;
+  }
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'title': title,

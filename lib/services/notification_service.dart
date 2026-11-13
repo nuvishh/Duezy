@@ -12,27 +12,7 @@ class NotificationService {
   bool _ready = false;
 
   Future<void> init() async {
-    tzdata.initializeTimeZones();
-    // Device timezone: try the abbreviation map first ("IST" ->
-    // Asia/Kolkata), else pick any tz location whose current UTC
-    // offset matches the device. (A dedicated timezone plugin was
-    // dropped: flutter_native_timezone 2.0.0 has no Android namespace
-    // and fails to configure under AGP 9.2.)
-    try {
-      final mapped = _tzName(DateTime.now().timeZoneName);
-      if (mapped != 'UTC') {
-        tz.setLocalLocation(tz.getLocation(mapped));
-      } else {
-        final offset = DateTime.now().timeZoneOffset.inSeconds;
-        final match = tz.timeZoneDatabase.locations.values.firstWhere(
-          (loc) => loc.currentTimeZone.offset == offset,
-          orElse: () => tz.UTC,
-        );
-        tz.setLocalLocation(match);
-      }
-    } catch (_) {
-      tz.setLocalLocation(tz.UTC);
-    }
+    _initTimeZone();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
@@ -57,6 +37,44 @@ class NotificationService {
         ?.requestPermissions(alert: true, badge: true, sound: true);
 
     _ready = true;
+  }
+
+  /// Minimal init for the background safety-net isolate: timezones +
+  /// plugin only. No permission prompts — there is no Activity to show
+  /// them from in a background isolate, and the user already granted
+  /// them in the main app.
+  Future<void> initHeadless() async {
+    _initTimeZone();
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios = DarwinInitializationSettings();
+    await _plugin.initialize(
+      const InitializationSettings(android: android, iOS: ios),
+    );
+    _ready = true;
+  }
+
+  void _initTimeZone() {
+    tzdata.initializeTimeZones();
+    // Device timezone: try the abbreviation map first ("IST" ->
+    // Asia/Kolkata), else pick any tz location whose current UTC
+    // offset matches the device. (A dedicated timezone plugin was
+    // dropped: flutter_native_timezone 2.0.0 has no Android namespace
+    // and fails to configure under AGP 9.2.)
+    try {
+      final mapped = _tzName(DateTime.now().timeZoneName);
+      if (mapped != 'UTC') {
+        tz.setLocalLocation(tz.getLocation(mapped));
+      } else {
+        final offset = DateTime.now().timeZoneOffset.inSeconds;
+        final match = tz.timeZoneDatabase.locations.values.firstWhere(
+          (loc) => loc.currentTimeZone.offset == offset,
+          orElse: () => tz.UTC,
+        );
+        tz.setLocalLocation(match);
+      }
+    } catch (_) {
+      tz.setLocalLocation(tz.UTC);
+    }
   }
 
   /// True when the user has allowed notifications for Duezy.
@@ -154,27 +172,22 @@ class NotificationService {
     return (v ?? 0) & 0x7fffffff;
   }
 
+  /// Shared channel/details for reminder notifications — the alarm path
+  /// and the safety net both use these, so a notification the alarm
+  /// already showed is updated, not duplicated, when the net fires.
+  static const _reminderDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'duezy_reminders',
+      'Due date reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
+
   Future<void> schedule(Reminder r) async {
     if (!_ready || r.done) return;
-    var when = DateTime(
-      r.dueDate.year,
-      r.dueDate.month,
-      r.dueDate.day,
-      r.remindAt.hour,
-      r.remindAt.minute,
-    ).subtract(Duration(days: r.remindBeforeDays));
-    if (when.isBefore(DateTime.now())) {
-      // The "days before" slot already passed (e.g. a reminder created
-      // today for today with "1 day before") — fall back to the due day
-      // at the chosen time instead of silently dropping the notification.
-      when = DateTime(
-        r.dueDate.year,
-        r.dueDate.month,
-        r.dueDate.day,
-        r.remindAt.hour,
-        r.remindAt.minute,
-      );
-    }
+    var when = r.fireTime();
     if (when.isBefore(DateTime.now())) {
       // Chosen time already passed (e.g. saved at 3:21 for 3:20) —
       // fire a minute from now instead of silently dropping it.
@@ -182,15 +195,6 @@ class NotificationService {
     }
 
     final amount = r.amount != null ? ' — ₹${_fmtAmount(r.amount!)}' : '';
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'duezy_reminders',
-        'Due date reminders',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-      iOS: DarwinNotificationDetails(),
-    );
     try {
       // Alarm-clock mode FIRST (setAlarmClock): MIUI/HyperOS swallows
       // setExactAndAllowWhileIdle alarms even with exact-alarms
@@ -199,19 +203,35 @@ class NotificationService {
       // treated as a user-visible alarm and is not blocked — trade-off
       // is a small alarm icon in the status bar while a reminder is
       // pending, which is fine for a reminder app.
-      await _scheduleWithMode(r, when, amount, details,
+      await _scheduleWithMode(r, when, amount, _reminderDetails,
           AndroidScheduleMode.alarmClock);
     } catch (_) {
       try {
         // Exact alarm so the reminder fires on time, not batched by Doze.
-        await _scheduleWithMode(r, when, amount, details,
+        await _scheduleWithMode(r, when, amount, _reminderDetails,
             AndroidScheduleMode.exactAllowWhileIdle);
       } catch (_) {
         // Exact alarms not granted on this device — fall back to inexact.
-        await _scheduleWithMode(
-            r, when, amount, details, AndroidScheduleMode.inexactAllowWhileIdle);
+        await _scheduleWithMode(r, when, amount, _reminderDetails,
+            AndroidScheduleMode.inexactAllowWhileIdle);
       }
     }
+  }
+
+  /// Shows a reminder's notification immediately (no alarm involved).
+  /// Used by the WorkManager safety net, which polls for due reminders
+  /// instead of trusting the OS to deliver a scheduled alarm. Same id,
+  /// channel and title as [schedule], so it updates rather than
+  /// duplicates a notification the alarm already showed.
+  Future<void> showReminderNow(Reminder r) async {
+    if (!_ready || r.done) return;
+    final amount = r.amount != null ? ' — ₹${_fmtAmount(r.amount!)}' : '';
+    await _plugin.show(
+      _notifId(r.id),
+      'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
+      '${r.category.label}$amount',
+      _reminderDetails,
+    );
   }
 
   Future<void> _scheduleWithMode(
