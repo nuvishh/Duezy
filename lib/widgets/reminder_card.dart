@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:intl/intl.dart';
 
 import '../models/reminder.dart';
@@ -20,14 +20,15 @@ class ReminderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final r = reminder;
     final cat = r.category;
     final dueLabel = _dueLabel(r);
     final dueColor = r.isOverdue
-        ? Colors.redAccent
+        ? scheme.error
         : r.isDueToday
             ? Colors.orangeAccent
-            : Colors.grey;
+            : scheme.onSurfaceVariant;
 
     return Dismissible(
       key: ValueKey(r.id),
@@ -36,10 +37,10 @@ class ReminderCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: Colors.redAccent.withValues(alpha: 0.15),
+          color: scheme.error.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: const Icon(Icons.delete_outline, color: Colors.redAccent),
+        child: Icon(Icons.delete_outline, color: scheme.error),
       ),
       confirmDismiss: (_) async {
         onDelete();
@@ -47,11 +48,11 @@ class ReminderCard extends StatelessWidget {
       },
       child: Card(
         elevation: 0,
-        color: Theme.of(context).colorScheme.surfaceContainer,
+        color: scheme.surfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: r.isOverdue
-              ? const BorderSide(color: Colors.redAccent, width: 1)
+              ? BorderSide(color: scheme.error, width: 1)
               : BorderSide.none,
         ),
         child: ListTile(
@@ -116,7 +117,7 @@ class ReminderCard extends StatelessWidget {
                     ),
                   if (r.repeat != RepeatInterval.none)
                     Icon(Icons.repeat_rounded,
-                        size: 13, color: Colors.grey.shade600),
+                        size: 13, color: scheme.onSurfaceVariant),
                 ],
               ),
               if (r.notes?.isNotEmpty ?? false)

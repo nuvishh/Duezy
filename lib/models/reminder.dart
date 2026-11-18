@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Category of a reminder — drives icon, color and grouping.
 enum ReminderCategory {

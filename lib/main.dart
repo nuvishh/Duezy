@@ -1,6 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'safety_net_task.dart';
@@ -48,6 +48,28 @@ class DuezyApp extends StatelessWidget {
     required this.notifications,
   });
 
+  ThemeData _buildTheme(ColorScheme scheme) {
+    return ThemeData(
+      colorScheme: scheme,
+      useMaterial3: true,
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: scheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Material You: follow the device wallpaper colors on Android 12+,
@@ -55,25 +77,22 @@ class DuezyApp extends StatelessWidget {
     const seed = Color(0xFF6C5CE7);
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
+        final lightScheme = lightDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: seed,
+              brightness: Brightness.light,
+            );
+        final darkScheme = darkDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: seed,
+              brightness: Brightness.dark,
+            );
+
         return MaterialApp(
           title: 'Duezy',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorScheme: lightDynamic ??
-                ColorScheme.fromSeed(
-                  seedColor: seed,
-                  brightness: Brightness.light,
-                ),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: darkDynamic ??
-                ColorScheme.fromSeed(
-                  seedColor: seed,
-                  brightness: Brightness.dark,
-                ),
-            useMaterial3: true,
-          ),
+          theme: _buildTheme(lightScheme),
+          darkTheme: _buildTheme(darkScheme),
           home: HomeScreen(storage: storage, notifications: notifications),
         );
       },

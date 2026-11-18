@@ -1,6 +1,6 @@
 import 'package:duezy/models/reminder.dart';
 import 'package:duezy/services/safety_net.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Reminder _reminder({

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:intl/intl.dart';
 
 import '../models/reminder.dart';
@@ -258,30 +258,31 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
                 const SizedBox(height: 12),
-                TextField(
+                SearchBar(
                   controller: _searchController,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search reminders…',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear_rounded),
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _query = '');
-                            },
-                          ),
-                    filled: true,
-                    fillColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide.none,
+                  hintText: 'Search reminders…',
+                  leading: const Icon(Icons.search_rounded),
+                  trailing: [
+                    if (_query.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear_rounded),
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                  ],
+                  elevation: const WidgetStatePropertyAll(0),
+                  backgroundColor: WidgetStatePropertyAll(
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
+                  onChanged: (v) => setState(() => _query = v),
                 ),
                 const SizedBox(height: 12),
                 _FilterRow(
@@ -337,7 +338,9 @@ class _HomeScreenState extends State<HomeScreen>
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(width: 8),
             Text('${items.length}',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13)),
           ],
         ),
       ));
@@ -668,7 +671,7 @@ class _FilterRow extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          ChoiceChip(
+          FilterChip(
             label: const Text('All'),
             selected: selected == null,
             onSelected: (_) => onSelect(null),
@@ -676,11 +679,12 @@ class _FilterRow extends StatelessWidget {
           const SizedBox(width: 8),
           ...ReminderCategory.values.map((c) => Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
+                child: FilterChip(
+                  avatar: Icon(c.icon, size: 16),
                   label: Text(c.label),
                   selected: selected == c,
-                  selectedColor: c.color.withValues(alpha: 0.2),
-                  onSelected: (_) => onSelect(c),
+                  onSelected: (bool isSelected) =>
+                      onSelect(isSelected ? c : null),
                 ),
               )),
         ],
@@ -695,18 +699,19 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
           Icon(Icons.event_available_rounded,
-              size: 64, color: Colors.grey.shade400),
+              size: 64, color: scheme.outlineVariant),
           const SizedBox(height: 12),
           const Text('All clear! 🎉',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text('No dues here. Add your first reminder.',
-              style: TextStyle(color: Colors.grey.shade600)),
+              style: TextStyle(color: scheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           FilledButton.tonalIcon(
             onPressed: onAdd,
@@ -726,18 +731,19 @@ class _NoResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
           Icon(Icons.search_off_rounded,
-              size: 64, color: Colors.grey.shade400),
+              size: 64, color: scheme.outlineVariant),
           const SizedBox(height: 12),
           const Text('No matches',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text('Nothing matches "$query".',
-              style: TextStyle(color: Colors.grey.shade600)),
+              style: TextStyle(color: scheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           FilledButton.tonalIcon(
             onPressed: onClear,

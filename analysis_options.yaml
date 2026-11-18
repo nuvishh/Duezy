@@ -1,10 +1,11 @@
-# Flutter 3.50 deprecates package:flutter/material.dart and
-# package:flutter/cupertino.dart (use material_ui / cupertino_ui instead),
-# and `flutter analyze` now fails the build on those info-level notices.
-# The deprecated imports still work in 3.50, so silence that diagnostic
-# here and defer the full material_ui migration to a separate refactor.
+include: package:flutter_lints/flutter.yaml
+
 analyzer:
-  errors:
-    deprecated_member_use: ignore
   exclude:
     - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**

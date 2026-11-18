@@ -1,26 +1,35 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:duezy/models/reminder.dart';
+import 'package:duezy/widgets/reminder_card.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('ReminderCard smoke test', (WidgetTester tester) async {
+    final reminder = Reminder(
+      id: 'test-1',
+      title: 'Netflix Subscription',
+      category: ReminderCategory.subscription,
+      amount: 499,
+      dueDate: DateTime.now().add(const Duration(days: 3)),
+      repeat: RepeatInterval.monthly,
+      remindBeforeDays: 1,
+      remindAt: const TimeOfDay(hour: 9, minute: 0),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReminderCard(
+            reminder: reminder,
+            onToggleDone: () {},
+            onEdit: () {},
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Netflix Subscription'), findsOneWidget);
+    expect(find.text('₹499'), findsOneWidget);
   });
 }

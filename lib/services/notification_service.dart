@@ -17,7 +17,7 @@ class NotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      settings: const InitializationSettings(android: android, iOS: ios),
     );
 
     await _plugin
@@ -48,7 +48,7 @@ class NotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      settings: const InitializationSettings(android: android, iOS: ios),
     );
     _ready = true;
   }
@@ -65,7 +65,7 @@ class NotificationService {
       if (mapped != 'UTC') {
         tz.setLocalLocation(tz.getLocation(mapped));
       } else {
-        final offset = DateTime.now().timeZoneOffset.inSeconds;
+        final offset = DateTime.now().timeZoneOffset;
         final match = tz.timeZoneDatabase.locations.values.firstWhere(
           (loc) => loc.currentTimeZone.offset == offset,
           orElse: () => tz.UTC,
@@ -227,10 +227,11 @@ class NotificationService {
     if (!_ready || r.done) return;
     final amount = r.amount != null ? ' — ₹${_fmtAmount(r.amount!)}' : '';
     await _plugin.show(
-      _notifId(r.id),
-      'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
-      '${r.category.label}$amount',
-      _reminderDetails,
+      id: _notifId(r.id),
+      title:
+          'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
+      body: '${r.category.label}$amount',
+      notificationDetails: _reminderDetails,
     );
   }
 
@@ -247,19 +248,20 @@ class NotificationService {
     // tz.local — if tz.local is wrong (e.g. UTC), every reminder
     // fired hours late, while the relative +1-min test still worked.
     await _plugin.zonedSchedule(
-      _notifId(r.id),
-      'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
-      '${r.category.label}$amount',
-      tz.TZDateTime.fromMillisecondsSinceEpoch(
+      id: _notifId(r.id),
+      title:
+          'Due ${r.remindBeforeDays == 0 ? 'today' : 'in ${r.remindBeforeDays}d'}: ${r.title}',
+      body: '${r.category.label}$amount',
+      scheduledDate: tz.TZDateTime.fromMillisecondsSinceEpoch(
           tz.local, when.millisecondsSinceEpoch),
-      details,
+      notificationDetails: details,
       androidScheduleMode: mode,
     );
   }
 
   Future<void> cancel(Reminder r) async {
     if (!_ready) return;
-    await _plugin.cancel(_notifId(r.id));
+    await _plugin.cancel(id: _notifId(r.id));
   }
 
   /// IANA name of the timezone alarms are scheduled in (debug aid).
@@ -274,10 +276,10 @@ class NotificationService {
   /// Immediate test notification — proves the channel can show at all.
   Future<void> showTestNotification() async {
     await _plugin.show(
-      999998,
-      'Duezy test',
-      'Immediate test — if you see this, notifications can show.',
-      _testDetails,
+      id: 999998,
+      title: 'Duezy test',
+      body: 'Immediate test — if you see this, notifications can show.',
+      notificationDetails: _testDetails,
     );
   }
 
@@ -288,30 +290,33 @@ class NotificationService {
     final when = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 1));
     try {
       await _plugin.zonedSchedule(
-        999997,
-        'Duezy test (scheduled)',
-        'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
-        when,
-        _testDetails,
+        id: 999997,
+        title: 'Duezy test (scheduled)',
+        body:
+            'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+        scheduledDate: when,
+        notificationDetails: _testDetails,
         androidScheduleMode: AndroidScheduleMode.alarmClock,
       );
     } catch (_) {
       try {
         await _plugin.zonedSchedule(
-          999997,
-          'Duezy test (scheduled)',
-          'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
-          when,
-          _testDetails,
+          id: 999997,
+          title: 'Duezy test (scheduled)',
+          body:
+              'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+          scheduledDate: when,
+          notificationDetails: _testDetails,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
       } catch (_) {
         await _plugin.zonedSchedule(
-          999997,
-          'Duezy test (scheduled)',
-          'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
-          when,
-          _testDetails,
+          id: 999997,
+          title: 'Duezy test (scheduled)',
+          body:
+              'Scheduled 1 minute ahead — if this appears, scheduled alarms work.',
+          scheduledDate: when,
+          notificationDetails: _testDetails,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );
       }
